@@ -1,0 +1,37 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+  datasource:
+    hikari:
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
+      maximum-pool-size: ${DB_POOL_MAX:5}
+      minimum-idle: ${DB_POOL_MIN:0}
+      leak-detection-threshold: ${DB_LEAK_DETECTION_MS:0}
+      schema: ${DB_SCHEMA:fitness}
+  flyway:
+    clean-disabled: true
+    default-schema: ${DB_SCHEMA:fitness}
+    schemas: ${DB_SCHEMA:fitness}
+    create-schemas: false
+
+server:
+  shutdown: graceful
+
+spring.lifecycle:
+  timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:20s}
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

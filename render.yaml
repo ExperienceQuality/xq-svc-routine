@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: xq-svc-exercise
+    runtime: image
+    image:
+      url: ghcr.io/experiencequality/xq-svc-exercice:latest
+      creds:
+        fromRegistryCreds:
+          name: ghcr
+    healthCheckPath: /actuator/health/readiness
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "10000"
+      - key: DB_SCHEMA
+        value: fitness
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false

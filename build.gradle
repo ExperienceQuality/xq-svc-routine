@@ -1,0 +1,114 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.1'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.xq'
+version = '0.0.1-SNAPSHOT'
+description = 'Exercise log book service'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+sourceSets {
+    e2e {
+        java.srcDir 'src/e2e/java'
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'GitHubPackages'
+        url = uri('https://maven.pkg.github.com/ExperienceQuality/jvm-test-kit')
+        credentials {
+            username = providers.environmentVariable('GITHUB_ACTOR').orNull
+            password = providers.environmentVariable('GITHUB_TOKEN').orNull
+        }
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-flyway'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+
+    runtimeOnly 'org.postgresql:postgresql'
+    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'io.swagger.parser.v3:swagger-parser-v3:2.1.45'
+    testImplementation 'org.yaml:snakeyaml'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    e2eImplementation 'org.junit.jupiter:junit-jupiter-api'
+    e2eImplementation 'com.xq:jvm-test-kit:3.0.1'
+    e2eImplementation platform('io.cucumber:cucumber-bom:8.0.2')
+    e2eImplementation 'io.cucumber:cucumber-junit-platform-engine'
+    e2eImplementation 'io.cucumber:cucumber-spring'
+    e2eImplementation platform('org.springframework.boot:spring-boot-dependencies:4.1.1')
+    e2eImplementation 'org.springframework.boot:spring-boot-test'
+    e2eImplementation 'org.springframework:spring-test'
+    e2eRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    e2eRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') { useJUnitPlatform() }
+
+tasks.register('e2eTest', Test) {
+    description = 'Runs the JVM Test Kit end-to-end suite against a running service.'
+    group = 'verification'
+    dependsOn tasks.named('e2eClasses')
+    testClassesDirs = sourceSets.e2e.output.classesDirs
+    classpath = sourceSets.e2e.runtimeClasspath
+    useJUnitPlatform()
+    outputs.upToDateWhen { false }
+}
+
+tasks.register('cucumberE2eTest', Test) {
+    description = 'Runs Cucumber end-to-end scenarios against a running service.'
+    group = 'verification'
+    dependsOn tasks.named('e2eClasses')
+    testClassesDirs = sourceSets.e2e.output.classesDirs
+    classpath = sourceSets.e2e.runtimeClasspath
+    useJUnitPlatform { includeEngines('cucumber') }
+    def projectTagFilter = providers.gradleProperty('cucumber.filter.tags').orNull
+    if (projectTagFilter != null) {
+        systemProperty 'cucumber.filter.tags', projectTagFilter
+    }
+    systemProperties System.properties.findAll { key, value -> key.toString().startsWith('cucumber.') }
+    outputs.upToDateWhen { false }
+}
+
+tasks.register('e2e') {
+    description = 'Runs end-to-end tests against XQORB_BASE_URI.'
+    group = 'verification'
+    dependsOn tasks.named('e2eTest')
+    dependsOn tasks.named('cucumberE2eTest')
+}
+
+tasks.register('packageService', Sync) {
+    description = 'Packages the runnable service JAR in the CI artifact layout.'
+    group = 'build'
+    dependsOn tasks.named('bootJar')
+    from(tasks.named('bootJar'))
+    into(layout.buildDirectory.dir('service'))
+    rename { 'exercise-service.jar' }
+}
+
+tasks.register('ci') {
+    description = 'Runs the checks and produces the packaged service artifact.'
+    group = 'verification'
+    dependsOn tasks.named('check')
+    dependsOn tasks.named('packageService')
+}

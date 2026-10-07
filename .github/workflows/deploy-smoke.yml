@@ -1,0 +1,41 @@
+# hub-stage: verify
+name: Deployment Smoke Test
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [Deploy]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deployment-smoke-production
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Production smoke test
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Check liveness
+        env:
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL }}
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 5 "$SERVICE_URL/actuator/health/liveness"
+
+      - name: Check readiness
+        env:
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL }}
+        run: curl --fail --silent --show-error --retry 10 --retry-delay 5 "$SERVICE_URL/actuator/health/readiness"
+
+      - name: Check API contract surface
+        env:
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL }}
+        run: curl --fail --silent --show-error "$SERVICE_URL/api/v1/exercise-logs/exercises"

@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/exercise_service}
+    username: ${SPRING_DATASOURCE_USERNAME:exercise_service}
+    password: ${SPRING_DATASOURCE_PASSWORD:exercise_service_pw}
+  docker:
+    compose:
+      enabled: false
