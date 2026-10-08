@@ -1,102 +1,73 @@
-# xq-svc-exercice
-[![Build](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/build.yml/badge.svg)](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/build.yml)
-[![Test](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/test.yml/badge.svg)](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/test.yml)
-[![Publish](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/publish.yml/badge.svg)](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/publish.yml)
-[![Deploy](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/deploy.yml/badge.svg)](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/deploy.yml)
-[![Deployment Smoke Test](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/deploy-smoke.yml/badge.svg)](https://github.com/ExperienceQuality/xq-svc-exercice/actions/workflows/deploy-smoke.yml)
+# xq-svc-routine
 
-Spring Boot microservice and PostgreSQL database for a single-user exercise log book.
+Java 21 and Spring Boot service for managing workout routines, ordered sessions, and
+exercise-history composition.
 
+## Requirements
 
+- Java 21
+- Docker with the Compose plugin
+- Gradle is provided by the Gradle Wrapper (`./gradlew`)
+
+The service uses PostgreSQL through Flyway migrations in
+`src/main/resources/db/migration`. Do not edit an applied migration; add a new versioned
+migration instead.
+
+## Source of truth
+
+The BDD scenarios under `apps/xq-svc-routine-e2e/features/` are the immutable acceptance
+contract for the service. `docs/routine-domain-contract.md` records the domain boundary,
+invariants, persistence decisions, and exercise-service composition rules derived from those
+scenarios.
 
 ## Local development
 
-Prerequisites: Java 21 and Docker with the Compose plugin.
+Start PostgreSQL with the repository's local Compose definition:
 
 ```shell
-./gradlew bootRun
+docker compose -f docker-compose.xq-svc-routine.yml up -d --wait
+./gradlew --no-daemon bootRun
 ```
 
-Flyway applies the schema from `src/main/resources/db/migration`. The service uses PostgreSQL
-through `compose.yaml`; set `POSTGRES_PORT=0` to let Docker select a free host port.
+The default local database is `xq_platform` on `localhost:55432`, with username
+`xq_platform` and password `local-only-xq-platform`. Override the `SPRING_DATASOURCE_*`
+variables when using another database. Flyway applies migrations during application startup.
 
-## API
-
-```text
-POST /api/v1/exercise-logs
-GET  /api/v1/exercise-logs/{exerciseLogId}
-GET  /api/v1/exercise-logs?exerciseName=Bench%20Press&sort=highestSetVolume&limit=2
-GET  /api/v1/exercise-logs/exercises
-```
-
-The service calculates each set's volume as `weightKg * reps` and ranks logs by their highest
-single-set volume. The distinct-exercises endpoint is a read projection from `exercise_logs`;
-there is no exercise catalog table yet.
-
-## Verification
+Stop the local database and remove its disposable volume after development:
 
 ```shell
-./gradlew test
+docker compose -f docker-compose.xq-svc-routine.yml down --volumes --remove-orphans
 ```
 
-The CI workflow runs unit and integration checks, packages the service JAR, starts PostgreSQL,
-checks the packaged service health endpoint, and runs the JVM Test Kit E2E suite. Releases are
-triggered by semantic-version tags such as `v1.0.0` or manually from GitHub Actions; the release
-workflow publishes the GHCR image `ghcr.io/experiencequality/xq-svc-exercice` with an immutable
-commit tag and registry-backed provenance and SBOM attestations.
-
-To run the CI-equivalent gates locally:
+## Commands
 
 ```shell
-./gradlew --no-daemon clean ci
-docker compose up -d --wait
+./gradlew --no-daemon clean test
+./gradlew --no-daemon bootJar
 ./gradlew --no-daemon e2e
-docker compose down --volumes --remove-orphans
 ```
 
-## Render and Neon deployment
+Run `e2e` after PostgreSQL is running and the packaged or boot-run service is listening on
+`http://localhost:8080`. Set `XQORB_BASE_URI` when the service uses another URL. The E2E
+source set uses the JVM Test Kit dependency from GitHub Packages and therefore needs
+`GITHUB_ACTOR` and `GITHUB_TOKEN` when dependency resolution requires authentication.
 
-GitHub Actions runs separate Build, Test, Publish, and Deploy workflows. Publish builds a Linux
- container image with Dockerfile and publishes it to GHCR after successful main-branch Test, or
- for an explicit release tag. Deploy then triggers an image-backed Render service with the immutable
- `sha-<commit>` image tag. The image targets `linux/amd64` and uses bounded JVM memory for Render's
- 512 MB plan. Configure the
-service health check as `/actuator/health/readiness`; the service binds to Render's `PORT` value
-and uses production profile settings when `SPRING_PROFILES_ACTIVE=production`.
+## HTTP and dependencies
 
-Create a Render workspace registry credential named `ghcr` with a GitHub token that has
-`read:packages` permission. Attach it to the image-backed service. Render does not automatically
-redeploy when a registry tag changes; the deploy hook in GitHub Actions triggers each image deploy.
+Health endpoints are `GET /livez` and `GET /readyz`. Routine CRUD and session operations are
+served under `/api/v1/routines`; the OpenAPI document is available at
+`src/main/resources/static/openapi/routine-service.yaml`.
 
-Use one Neon project and its protected `main` branch only. Configure these Render environment
-variables with the Neon `main` connection and runtime role; keep values in Render, never Git:
+Routine definitions and session mutations are local and must not call the exercise service.
+The exercise service is a read-only downstream dependency used only when composing exercise
+history for `GET /api/v1/routines/{id}/exercise-records`. Configure its base URL with
+`EXERCISE_SERVICE_BASE_URL` (default `http://127.0.0.1:8090`). Downstream failures map to the
+documented unavailable or bad-response contracts; routine definitions remain readable without
+that dependency.
 
-```text
-SPRING_PROFILES_ACTIVE=production
-SPRING_DATASOURCE_URL=<Neon main pooled connection URL>
-SPRING_DATASOURCE_USERNAME=<runtime role>
-SPRING_DATASOURCE_PASSWORD=<runtime role password>
-DB_SCHEMA=fitness
-```
+## CI and delivery
 
-Production uses a 30-second database connection timeout by default to tolerate Neon compute
-cold start. Override `DB_CONNECTION_TIMEOUT_MS` in Render only when measured startup behavior
-requires a different value.
-
-Flyway applies migrations from `src/main/resources/db/migration`. Validate migrations against
-local PostgreSQL in CI, then review production migration impact before deploying to Neon `main`.
-Never enable Flyway clean in production or edit an applied migration.
-
-Create GitHub environment `production`, restrict it to `main`, and set repository variable
-`RENDER_SERVICE_URL` to the Render service URL. The deployment smoke workflow checks liveness,
-readiness, and the read-only distinct-exercises endpoint. Run it only after Render deploys.
-
-Create repository secret `RENDER_DEPLOY_HOOK_URL` from the Render service Settings → Deploy Hook.
-The deploy workflow appends the immutable GHCR image tag to this hook. Keep the hook secret; it
-can trigger production deploys. [Render deploy hooks](https://render.com/docs/deploy-hooks)
-
-Build the deployment image locally with:
-
-```shell
-docker build -t xq-svc-exercise:test .
-```
+GitHub Actions keeps Build, Test, Publish, Deploy, and Deployment Smoke Test responsibilities
+separate. Build and Test use the Gradle Wrapper and Java 21. Publish and Deploy are gated
+delivery workflows; they must use immutable tested artifacts and repository/environment secrets,
+never values committed to this repository.

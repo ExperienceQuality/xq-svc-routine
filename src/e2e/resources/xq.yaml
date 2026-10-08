@@ -1,2 +1,8 @@
-testBaseUrl: http://localhost:8080/
-xq.rest.base-uri: http://localhost:8080/
+testBaseUrl: http://127.0.0.1:18090
+xq.rest.base-uri: http://127.0.0.1:18090
+stub:
+  enabled: true
+  host: 127.0.0.1
+  port: 18091
+  reset-before-scenario: true
+  isolate-scenarios: true

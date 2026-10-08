@@ -1,24 +1,10 @@
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '4.1.1'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.xq.jvm-test-kit.service-plugin' version '3.0.3'
 }
 
 group = 'com.xq'
 version = '0.0.1-SNAPSHOT'
-description = 'Exercise log book service'
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-sourceSets {
-    e2e {
-        java.srcDir 'src/e2e/java'
-    }
-}
+description = 'Routine service'
 
 repositories {
     mavenCentral()
@@ -39,76 +25,72 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.flywaydb:flyway-database-postgresql'
-
     runtimeOnly 'org.postgresql:postgresql'
-    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
-
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
-    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
-    testImplementation 'org.testcontainers:testcontainers-postgresql'
-    testImplementation 'io.swagger.parser.v3:swagger-parser-v3:2.1.45'
-    testImplementation 'org.yaml:snakeyaml'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    e2eImplementation 'org.junit.jupiter:junit-jupiter-api'
-    e2eImplementation 'com.xq:jvm-test-kit:3.0.1'
-    e2eImplementation platform('io.cucumber:cucumber-bom:8.0.2')
-    e2eImplementation 'io.cucumber:cucumber-junit-platform-engine'
-    e2eImplementation 'io.cucumber:cucumber-spring'
-    e2eImplementation platform('org.springframework.boot:spring-boot-dependencies:4.1.1')
-    e2eImplementation 'org.springframework.boot:spring-boot-test'
-    e2eImplementation 'org.springframework:spring-test'
-    e2eRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
-    e2eRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    e2eImplementation 'org.junit.platform:junit-platform-suite'
+    e2eImplementation 'io.cucumber:cucumber-junit-platform-engine:8.0.2'
+    e2eImplementation 'com.xq:jvm-test-kit:3.0.3'
 }
 
-tasks.named('test') { useJUnitPlatform() }
-
-tasks.register('e2eTest', Test) {
-    description = 'Runs the JVM Test Kit end-to-end suite against a running service.'
-    group = 'verification'
-    dependsOn tasks.named('e2eClasses')
-    testClassesDirs = sourceSets.e2e.output.classesDirs
-    classpath = sourceSets.e2e.runtimeClasspath
-    useJUnitPlatform()
-    outputs.upToDateWhen { false }
+jvmTestKitService {
+    artifactName = 'routine-service.jar'
+    healthUrl = 'http://127.0.0.1:18090/livez'
+    startupTimeout = java.time.Duration.ofSeconds(120)
+    environment = [
+        PORT: '18090',
+        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/fitness',
+        SPRING_DATASOURCE_USERNAME: 'routine_service',
+        SPRING_DATASOURCE_PASSWORD: 'routine_service_pw',
+        EXERCISE_SERVICE_BASE_URL: 'http://127.0.0.1:18091'
+    ]
+    cucumberPackage = 'test.steps'
+    cucumberGlue = ['test.steps']
 }
 
-tasks.register('cucumberE2eTest', Test) {
-    description = 'Runs Cucumber end-to-end scenarios against a running service.'
+def e2eCompose = file('compose.yaml')
+
+tasks.register('startPostgres') {
     group = 'verification'
-    dependsOn tasks.named('e2eClasses')
-    testClassesDirs = sourceSets.e2e.output.classesDirs
-    classpath = sourceSets.e2e.runtimeClasspath
-    useJUnitPlatform { includeEngines('cucumber') }
-    def projectTagFilter = providers.gradleProperty('cucumber.filter.tags').orNull
-    if (projectTagFilter != null) {
-        systemProperty 'cucumber.filter.tags', projectTagFilter
+    description = 'Starts the disposable PostgreSQL database for E2E tests.'
+    doLast {
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
+        }
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'up', '-d', '--wait'
+        }
     }
-    systemProperties System.properties.findAll { key, value -> key.toString().startsWith('cucumber.') }
-    outputs.upToDateWhen { false }
 }
 
-tasks.register('e2e') {
-    description = 'Runs end-to-end tests against XQORB_BASE_URI.'
+tasks.register('stopPostgres') {
     group = 'verification'
-    dependsOn tasks.named('e2eTest')
-    dependsOn tasks.named('cucumberE2eTest')
+    description = 'Stops and removes the disposable PostgreSQL database.'
+    doLast {
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
+        }
+    }
 }
 
-tasks.register('packageService', Sync) {
-    description = 'Packages the runnable service JAR in the CI artifact layout.'
-    group = 'build'
-    dependsOn tasks.named('bootJar')
-    from(tasks.named('bootJar'))
-    into(layout.buildDirectory.dir('service'))
-    rename { 'exercise-service.jar' }
+tasks.named('startE2eService') {
+    dependsOn startPostgres
 }
 
-tasks.register('ci') {
-    description = 'Runs the checks and produces the packaged service artifact.'
-    group = 'verification'
-    dependsOn tasks.named('check')
-    dependsOn tasks.named('packageService')
+tasks.named('stopE2eService') {
+    finalizedBy stopPostgres
+}
+
+tasks.named('cucumberE2eTest') {
+    dependsOn startE2eService
+    finalizedBy stopE2eService
+    environment 'XQORB_BASE_URI', 'http://127.0.0.1:18090'
+    systemProperty 'xqorb.base-uri', 'http://127.0.0.1:18090'
+    environment 'XQ_STUB_ENABLED', 'true'
+    environment 'XQ_STUB_HOST', '127.0.0.1'
+    environment 'XQ_STUB_PORT', '18091'
+}
+
+tasks.named('e2e') {
+    setDependsOn([tasks.named('cucumberE2eTest')])
 }
