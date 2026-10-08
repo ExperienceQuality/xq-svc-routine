@@ -45,9 +45,13 @@ jobs:
         env:
           IMAGE: ghcr.io/experiencequality/xq-svc-routine
           IMAGE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           docker buildx build \
             --platform linux/amd64 \
+            --secret id=github_actor,env=GITHUB_ACTOR \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --tag "$IMAGE:sha-$IMAGE_SHA" \
             --push \
             .
