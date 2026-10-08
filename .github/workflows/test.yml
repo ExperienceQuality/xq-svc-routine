@@ -24,7 +24,6 @@ jobs:
     env:
       GITHUB_ACTOR: ${{ github.actor }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      POSTGRES_PASSWORD: ci-exercise-service-password
       XQORB_BASE_URI: http://localhost:8080
     steps:
       - uses: actions/checkout@v6
@@ -33,52 +32,18 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
-      - name: Run unit and integration tests
+      - name: Run unit tests
         run: ./gradlew --no-daemon test
-      - name: Start PostgreSQL
-        run: docker compose up -d --wait
-      - name: Package test service
-        run: ./gradlew --no-daemon bootJar
-      - name: Start packaged service
-        shell: bash
-        run: |
-          nohup java -jar build/libs/*.jar \
-            --spring.profiles.active=e2e \
-            --spring.datasource.url=jdbc:postgresql://localhost:5432/exercise_service \
-            --spring.datasource.username=exercise_service \
-            --spring.datasource.password="$POSTGRES_PASSWORD" \
-            > build/application.log 2>&1 &
-          echo $! > build/application.pid
-      - name: Wait for service health
-        shell: bash
-        run: |
-          for attempt in {1..60}; do
-            if curl --fail --silent http://localhost:8080/actuator/health > /dev/null; then exit 0; fi
-            if [[ -f build/application.pid ]] && ! kill -0 "$(<build/application.pid)" 2>/dev/null; then
-              echo 'Packaged service exited before becoming healthy.'
-              exit 1
-            fi
-            sleep 2
-          done
-          echo 'Timed out waiting for the packaged service.'
-          exit 1
-      - name: Run end-to-end tests
-        run: ./gradlew --no-daemon e2e
+      - name: Run BDD-backed end-to-end tests
+        run: ./gradlew --no-daemon clean e2e
       - name: Upload test diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: exercise-service-test-${{ github.run_id }}-${{ github.run_attempt }}
+          name: routine-service-test-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: ignore
           retention-days: 14
           path: |
             build/application.log
             build/reports/**
             build/test-results/**
-      - name: Stop service
-        if: always()
-        run: |
-          if [[ -f build/application.pid ]]; then kill "$(<build/application.pid)" 2>/dev/null || true; fi
-      - name: Stop PostgreSQL
-        if: always()
-        run: docker compose down --volumes --remove-orphans

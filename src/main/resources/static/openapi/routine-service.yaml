@@ -1,0 +1,344 @@
+openapi: 3.1.0
+info:
+  title: Routine Service API
+  version: 1.0.0
+  description: Manage ordered workout routines and compose exercise history.
+servers:
+  - url: /
+paths:
+  /livez:
+    get:
+      operationId: liveness
+      summary: Check liveness
+      responses:
+        '200':
+          description: Service is alive.
+  /readyz:
+    get:
+      operationId: readiness
+      summary: Check readiness
+      responses:
+        '200':
+          description: Service is ready.
+  /api/v1/routines:
+    post:
+      operationId: createRoutine
+      summary: Create a routine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoutineRequest'
+      responses:
+        '201':
+          description: Routine created.
+          headers:
+            Location:
+              required: true
+              schema: { type: string, format: uri-reference }
+            ETag:
+              required: true
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Routine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    get:
+      operationId: listRoutines
+      summary: List routines
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: includeArchived
+          in: query
+          schema: { type: boolean, default: false }
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Routine page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RoutinePage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/v1/routines/{routineId}:
+    parameters:
+      - $ref: '#/components/parameters/RoutineId'
+    get:
+      operationId: getRoutine
+      summary: Get a routine
+      responses:
+        '200':
+          description: Routine details.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Routine' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      operationId: updateRoutine
+      summary: Update routine metadata
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/RoutinePatch' }
+      responses:
+        '200':
+          description: Routine updated.
+          headers:
+            ETag:
+              required: true
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Routine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      operationId: archiveRoutine
+      summary: Archive a routine
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Routine archived. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /api/v1/routines/{routineId}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/RoutineId'
+    post:
+      operationId: addRoutineSession
+      summary: Add an ordered session
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionRequest' }
+      responses:
+        '201':
+          description: Session added.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /api/v1/routines/{routineId}/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/RoutineId'
+      - $ref: '#/components/parameters/SessionId'
+    get:
+      operationId: getRoutineSession
+      summary: Get a routine session
+      responses:
+        '200':
+          description: Session details.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: replaceRoutineSession
+      summary: Replace a session
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SessionRequest' }
+      responses:
+        '200':
+          description: Session replaced.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Session' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+    delete:
+      operationId: deleteRoutineSession
+      summary: Delete a session
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Session deleted. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+  /api/v1/routines/{routineId}/exercise-records:
+    parameters:
+      - $ref: '#/components/parameters/RoutineId'
+    get:
+      operationId: listExerciseRecords
+      summary: Compose exercise records for a session
+      parameters:
+        - name: sessionId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Composed exercise records.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+components:
+  parameters:
+    RoutineId:
+      name: routineId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string }
+  responses:
+    BadRequest:
+      description: Request validation failed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PreconditionFailed:
+      description: ETag precondition failed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    BadGateway:
+      description: Downstream response was invalid.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ServiceUnavailable:
+      description: Downstream service unavailable.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    RoutineRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+    RoutinePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        notes: { type: [string, 'null'], maxLength: 2000 }
+    Routine:
+      type: object
+      required: [id, name, version, createdAt, updatedAt, sessions]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        notes: { type: [string, 'null'] }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        sessions:
+          type: array
+          items: { $ref: '#/components/schemas/Session' }
+    RoutineListItem:
+      type: object
+      required: [id, name, version, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        notes: { type: [string, 'null'] }
+        archivedAt: { type: [string, 'null'], format: date-time }
+        version: { type: integer, format: int64, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RoutinePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/RoutineListItem' }
+        nextCursor: { type: [string, 'null'] }
+    SessionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, position, exercises]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        position: { type: integer, minimum: 0 }
+        exercises:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/ExerciseReference' }
+    ExerciseReference:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+    Session:
+      type: object
+      required: [id, name, position, exercises]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        position: { type: integer, minimum: 0 }
+        exercises:
+          type: array
+          items: { $ref: '#/components/schemas/ExerciseReference' }
+    RecordPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { type: object, additionalProperties: true }
+        nextCursor: { type: [string, 'null'] }
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        code: { type: string }
+        violations:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }

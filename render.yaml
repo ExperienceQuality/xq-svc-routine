@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: xq-svc-exercise
+    name: xq-svc-routine
     runtime: image
     image:
-      url: ghcr.io/experiencequality/xq-svc-exercice:latest
+      url: ghcr.io/experiencequality/xq-svc-routine:latest
       creds:
         fromRegistryCreds:
           name: ghcr
@@ -14,7 +14,7 @@ services:
       - key: PORT
         value: "10000"
       - key: DB_SCHEMA
-        value: fitness
+        value: routine
       - key: SPRING_DATASOURCE_URL
         sync: false
       - key: SPRING_DATASOURCE_USERNAME

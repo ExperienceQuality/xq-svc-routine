@@ -28,7 +28,7 @@ jobs:
       - name: Trigger Render deploy
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          IMAGE: ghcr.io/experiencequality/xq-svc-exercice:sha-${{ github.event.workflow_run.head_sha || github.sha }}
+          IMAGE: ghcr.io/experiencequality/xq-svc-routine:sha-${{ github.event.workflow_run.head_sha || github.sha }}
         run: |
           encoded_image=$(jq -rn --arg image "$IMAGE" '$image | @uri')
           curl --fail --silent --show-error --request POST \

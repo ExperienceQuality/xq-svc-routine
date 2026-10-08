@@ -1,20 +1,20 @@
 services:
   postgres:
-    image: postgres:18.6-bookworm
+    image: postgres:17
     environment:
-      POSTGRES_DB: exercise_service
-      POSTGRES_USER: exercise_service
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-exercise_service_pw}
+      POSTGRES_DB: routine_service
+      POSTGRES_USER: routine_service
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-routine_service_pw}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-55432}:5432"
     volumes:
-      - exercise-service-postgres-data:/var/lib/postgresql
+      - routine-service-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U exercise_service -d exercise_service"]
+      test: ["CMD-SHELL", "pg_isready -U routine_service -d routine_service"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 10s
 
 volumes:
-  exercise-service-postgres-data:
+  routine-service-postgres-data:
