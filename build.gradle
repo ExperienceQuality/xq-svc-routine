@@ -1,25 +1,11 @@
 plugins {
-    id 'java'
-    id 'org.springframework.boot' version '4.1.1'
-    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.xq.jvm-test-kit.service-plugin' version '3.0.3'
 }
 
 group = 'com.xq'
 version = '0.0.1-SNAPSHOT'
 description = 'Routine service'
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
-
-sourceSets {
-    e2e {
-        java.srcDir 'src/e2e/java'
-        resources.srcDir 'src/e2e/resources'
-    }
-}
 repositories {
     mavenCentral()
     maven {
@@ -31,6 +17,7 @@ repositories {
         }
     }
 }
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
@@ -44,110 +31,75 @@ dependencies {
     e2eImplementation 'org.junit.jupiter:junit-jupiter-api'
     e2eImplementation 'org.junit.platform:junit-platform-suite'
     e2eImplementation 'io.cucumber:cucumber-junit-platform-engine:8.0.2'
-    e2eImplementation 'io.cucumber:cucumber-spring:8.0.2'
-    e2eImplementation 'org.springframework.boot:spring-boot-test'
-    e2eImplementation 'org.springframework:spring-test'
     e2eImplementation 'com.xq:jvm-test-kit:3.0.3'
     e2eRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
     e2eRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
-tasks.named('test') {
-    useJUnitPlatform()
+
+jvmTestKitService {
+    artifactName = 'routine-service.jar'
+    healthUrl = 'http://127.0.0.1:18090/livez'
+    startupTimeout = java.time.Duration.ofSeconds(120)
+    environment = [
+        PORT: '18090',
+        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/routine_service',
+        SPRING_DATASOURCE_USERNAME: 'routine_service',
+        SPRING_DATASOURCE_PASSWORD: 'routine_service_pw',
+        EXERCISE_SERVICE_BASE_URL: 'http://127.0.0.1:18091'
+    ]
+    cucumberPackage = 'test.steps'
+    cucumberGlue = ['test.steps']
 }
-def e2ePort = '18090'
-def e2eBaseUri = "http://127.0.0.1:${e2ePort}"
+
 def e2eCompose = file('compose.yaml')
-def e2ePid = layout.buildDirectory.file('e2e/service.pid')
-def e2eLog = layout.buildDirectory.file('e2e/service.log')
 
-tasks.named('processE2eResources') {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
-tasks.register('startE2eService') {
-    dependsOn bootJar
-    outputs.file(e2ePid)
+tasks.register('startPostgres') {
+    group = 'verification'
+    description = 'Starts the disposable PostgreSQL database for E2E tests.'
     doLast {
-        // This compose project owns a disposable E2E volume. Strict Flyway history must start clean.
-        exec { commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans' }
-        exec { commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'up', '-d', '--wait' }
-        def pidFile = e2ePid.get().asFile
-        def logFile = e2eLog.get().asFile
-        pidFile.parentFile.mkdirs()
-        logFile.parentFile.mkdirs()
-        def javaBin = new File(System.getProperty('java.home'), 'bin/java').absolutePath
-        def child = new ProcessBuilder(javaBin, '-jar', bootJar.archiveFile.get().asFile.absolutePath)
-                .directory(projectDir)
-                .redirectErrorStream(true)
-                .redirectOutput(logFile)
-        child.environment().putAll([
-                PORT: e2ePort,
-                SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/routine_service',
-                SPRING_DATASOURCE_USERNAME: 'routine_service',
-                SPRING_DATASOURCE_PASSWORD: 'routine_service_pw',
-                EXERCISE_SERVICE_BASE_URL: 'http://127.0.0.1:18091'
-        ])
-        def process = child.start()
-        pidFile.text = process.pid().toString()
-        def ready = false
-        60.times {
-            if (!process.isAlive()) return
-            try {
-                def connection = new URL("${e2eBaseUri}/livez").openConnection()
-                connection.connectTimeout = 500
-                connection.readTimeout = 500
-                ready = connection.responseCode == 200
-            } catch (Exception ignored) { }
-            if (!ready) Thread.sleep(500)
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
         }
-        if (!ready) throw new GradleException("E2E service failed to become ready; see ${logFile}")
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'up', '-d', '--wait'
+        }
     }
 }
 
-tasks.register('stopE2eService') {
+tasks.register('stopPostgres') {
+    group = 'verification'
+    description = 'Stops and removes the disposable PostgreSQL database.'
     doLast {
-        def pidFile = e2ePid.get().asFile
-        if (pidFile.isFile()) {
-            def pid = pidFile.text.trim()
-            if (pid ==~ /[0-9]+/) {
-                try { ProcessHandle.of(Long.parseLong(pid)).ifPresent { it.destroy() } } catch (Exception ignored) { }
-            }
-            pidFile.delete()
+        exec {
+            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
         }
-        exec { commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans' }
     }
 }
 
-tasks.register('e2eTest', Test) {
-    dependsOn e2eClasses, startE2eService
+tasks.named('startE2eService') {
+    dependsOn startPostgres
+}
+
+tasks.named('stopE2eService') {
+    finalizedBy stopPostgres
+}
+
+tasks.named('e2eTest') {
+    dependsOn startE2eService
     finalizedBy stopE2eService
-    testClassesDirs = sourceSets.e2e.output.classesDirs
-    classpath = sourceSets.e2e.runtimeClasspath
-    useJUnitPlatform()
-    filter { includeTestsMatching 'test.RoutineBusinessE2ETest' }
-    environment 'XQORB_BASE_URI', e2eBaseUri
-    systemProperty 'xqorb.base-uri', e2eBaseUri
+    environment 'XQORB_BASE_URI', 'http://127.0.0.1:18090'
+    systemProperty 'xqorb.base-uri', 'http://127.0.0.1:18090'
     environment 'XQ_STUB_ENABLED', 'true'
     environment 'XQ_STUB_HOST', '127.0.0.1'
     environment 'XQ_STUB_PORT', '18091'
-    outputs.upToDateWhen { false }
 }
 
-tasks.register('cucumberE2eTest', Test) {
-    dependsOn e2eClasses, startE2eService
+tasks.named('cucumberE2eTest') {
+    dependsOn startE2eService
     finalizedBy stopE2eService
-    testClassesDirs = sourceSets.e2e.output.classesDirs
-    classpath = sourceSets.e2e.runtimeClasspath
-    useJUnitPlatform()
-    filter { includeTestsMatching 'test.RoutineCucumberE2ETest' }
-    environment 'XQORB_BASE_URI', e2eBaseUri
-    systemProperty 'xqorb.base-uri', e2eBaseUri
+    environment 'XQORB_BASE_URI', 'http://127.0.0.1:18090'
+    systemProperty 'xqorb.base-uri', 'http://127.0.0.1:18090'
     environment 'XQ_STUB_ENABLED', 'true'
     environment 'XQ_STUB_HOST', '127.0.0.1'
     environment 'XQ_STUB_PORT', '18091'
-    outputs.upToDateWhen { false }
-}
-
-tasks.register('e2e') {
-    dependsOn e2eTest, cucumberE2eTest
 }

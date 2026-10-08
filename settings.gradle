@@ -1,3 +1,17 @@
+pluginManagement {
+    repositories {
+        maven {
+            url = uri('https://maven.pkg.github.com/ExperienceQuality/jvm-test-kit')
+            credentials {
+                username = providers.environmentVariable('GITHUB_ACTOR').orNull
+                password = providers.environmentVariable('GITHUB_TOKEN').orNull
+            }
+        }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 plugins {
     id 'org.gradle.toolchains.foojay-resolver-convention' version '0.10.0'
 }
