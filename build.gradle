@@ -81,7 +81,7 @@ tasks.named('stopE2eService') {
     finalizedBy stopPostgres
 }
 
-tasks.named('e2eTest') {
+tasks.named('cucumberE2eTest') {
     dependsOn startE2eService
     finalizedBy stopE2eService
     environment 'XQORB_BASE_URI', 'http://127.0.0.1:18090'
@@ -92,5 +92,5 @@ tasks.named('e2eTest') {
 }
 
 tasks.named('e2e') {
-    setDependsOn([tasks.named('e2eTest')])
+    setDependsOn([tasks.named('cucumberE2eTest')])
 }
