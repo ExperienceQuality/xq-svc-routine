@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:17
     environment:
-      POSTGRES_DB: routine_service
+      POSTGRES_DB: fitness
       POSTGRES_USER: routine_service
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-routine_service_pw}
     ports:
@@ -10,7 +10,7 @@ services:
     volumes:
       - routine-service-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U routine_service -d routine_service"]
+      test: ["CMD-SHELL", "pg_isready -U routine_service -d fitness"]
       interval: 5s
       timeout: 5s
       retries: 10

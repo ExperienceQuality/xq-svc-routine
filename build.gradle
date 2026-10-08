@@ -28,12 +28,9 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    e2eImplementation 'org.junit.jupiter:junit-jupiter-api'
     e2eImplementation 'org.junit.platform:junit-platform-suite'
     e2eImplementation 'io.cucumber:cucumber-junit-platform-engine:8.0.2'
     e2eImplementation 'com.xq:jvm-test-kit:3.0.3'
-    e2eRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
-    e2eRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 jvmTestKitService {
@@ -42,7 +39,7 @@ jvmTestKitService {
     startupTimeout = java.time.Duration.ofSeconds(120)
     environment = [
         PORT: '18090',
-        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/routine_service',
+        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/fitness',
         SPRING_DATASOURCE_USERNAME: 'routine_service',
         SPRING_DATASOURCE_PASSWORD: 'routine_service_pw',
         EXERCISE_SERVICE_BASE_URL: 'http://127.0.0.1:18091'
@@ -94,12 +91,6 @@ tasks.named('e2eTest') {
     environment 'XQ_STUB_PORT', '18091'
 }
 
-tasks.named('cucumberE2eTest') {
-    dependsOn startE2eService
-    finalizedBy stopE2eService
-    environment 'XQORB_BASE_URI', 'http://127.0.0.1:18090'
-    systemProperty 'xqorb.base-uri', 'http://127.0.0.1:18090'
-    environment 'XQ_STUB_ENABLED', 'true'
-    environment 'XQ_STUB_HOST', '127.0.0.1'
-    environment 'XQ_STUB_PORT', '18091'
+tasks.named('e2e') {
+    setDependsOn([tasks.named('e2eTest')])
 }

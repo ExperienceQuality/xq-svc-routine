@@ -1,7 +1,7 @@
 spring:
   application.name: routine-service
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:55432/routine_service}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:55432/fitness}
     username: ${SPRING_DATASOURCE_USERNAME:routine_service}
     password: ${SPRING_DATASOURCE_PASSWORD:routine_service_pw}
   flyway:
