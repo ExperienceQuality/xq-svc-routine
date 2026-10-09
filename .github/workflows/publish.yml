@@ -2,8 +2,6 @@
 name: Publish
 
 on:
-  push:
-    tags: ['v*']
   workflow_run:
     workflows: [Test]
     types: [completed]
@@ -23,7 +21,6 @@ jobs:
     name: Publish GHCR image
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event_name == 'push' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -53,5 +50,6 @@ jobs:
             --secret id=github_actor,env=GITHUB_ACTOR \
             --secret id=github_token,env=GITHUB_TOKEN \
             --tag "$IMAGE:sha-$IMAGE_SHA" \
+            --tag "$IMAGE:latest" \
             --push \
             .
