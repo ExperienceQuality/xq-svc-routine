@@ -4,10 +4,16 @@ WORKDIR /workspace
 COPY gradlew gradle.properties settings.gradle build.gradle ./
 COPY gradle gradle
 RUN chmod +x gradlew
-RUN ./gradlew --no-daemon dependencies
+RUN --mount=type=secret,id=github_actor \
+    --mount=type=secret,id=github_token \
+    export GITHUB_ACTOR="$(cat /run/secrets/github_actor)" GITHUB_TOKEN="$(cat /run/secrets/github_token)" && \
+    ./gradlew --no-daemon dependencies
 
 COPY src src
-RUN ./gradlew --no-daemon bootJar
+RUN --mount=type=secret,id=github_actor \
+    --mount=type=secret,id=github_token \
+    export GITHUB_ACTOR="$(cat /run/secrets/github_actor)" GITHUB_TOKEN="$(cat /run/secrets/github_token)" && \
+    ./gradlew --no-daemon bootJar
 
 FROM eclipse-temurin:21-jre
 
