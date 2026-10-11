@@ -1,3 +1,5 @@
+create schema if not exists routine;
+
 create extension pgcrypto;
 
 create table routine.routines (
