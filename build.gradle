@@ -39,7 +39,7 @@ jvmTestKitService {
     startupTimeout = java.time.Duration.ofSeconds(120)
     environment = [
         PORT: '18090',
-        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55432/fitness',
+        SPRING_DATASOURCE_URL: 'jdbc:postgresql://127.0.0.1:55433/fitness',
         SPRING_DATASOURCE_USERNAME: 'routine_service',
         SPRING_DATASOURCE_PASSWORD: 'routine_service_pw',
         EXERCISE_SERVICE_BASE_URL: 'http://127.0.0.1:18091'
@@ -49,16 +49,20 @@ jvmTestKitService {
 }
 
 def e2eCompose = file('compose.yaml')
+def e2eComposeProject = 'xq-svc-routine-e2e'
+def e2ePostgresPort = '55433'
 
 tasks.register('startPostgres') {
     group = 'verification'
     description = 'Starts the disposable PostgreSQL database for E2E tests.'
     doLast {
         exec {
-            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
+            environment 'POSTGRES_PORT', e2ePostgresPort
+            commandLine 'docker', 'compose', '-p', e2eComposeProject, '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
         }
         exec {
-            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'up', '-d', '--wait'
+            environment 'POSTGRES_PORT', e2ePostgresPort
+            commandLine 'docker', 'compose', '-p', e2eComposeProject, '-f', e2eCompose.absolutePath, 'up', '-d', '--wait'
         }
     }
 }
@@ -68,7 +72,8 @@ tasks.register('stopPostgres') {
     description = 'Stops and removes the disposable PostgreSQL database.'
     doLast {
         exec {
-            commandLine 'docker', 'compose', '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
+            environment 'POSTGRES_PORT', e2ePostgresPort
+            commandLine 'docker', 'compose', '-p', e2eComposeProject, '-f', e2eCompose.absolutePath, 'down', '-v', '--remove-orphans'
         }
     }
 }
